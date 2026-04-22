@@ -1,11 +1,14 @@
 import io
 import base64
 import os
+import numpy as np
+import cv2
 import torch
 import torch.nn as nn
 from flask import Flask, request, jsonify, render_template
 from PIL import Image
 from torchvision import transforms
+from restore import detect_mask, inpaint
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 Mo
@@ -96,6 +99,21 @@ def tensor_to_base64(tensor: torch.Tensor) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def numpy_to_base64(arr_bgr: np.ndarray) -> str:
+    arr_rgb = cv2.cvtColor(arr_bgr, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(arr_rgb)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def mask_to_base64(mask: np.ndarray) -> str:
+    img = Image.fromarray(mask)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -133,6 +151,83 @@ def colorize():
         "original": tensor_to_base64(gray_rgb),
         "colorized": tensor_to_base64(fake),
     })
+
+
+@app.post("/process")
+def process():
+    if "file" not in request.files:
+        return jsonify({"error": "Aucun fichier reçu"}), 400
+
+    file = request.files["file"]
+    if not file or not allowed_file(file.filename):
+        return jsonify({"error": "Format invalide. Utilise JPG ou PNG."}), 400
+
+    mode = request.form.get("mode", "colorize")
+
+    try:
+        pil_img = Image.open(file.stream)
+    except Exception:
+        return jsonify({"error": "Impossible de lire l'image."}), 400
+
+    if mode == "colorize":
+        gray = pil_img.convert("L")
+        transform = transforms.Compose([
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ])
+        gray_tensor = transform(gray).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            fake = G(gray_tensor).squeeze(0).cpu() * 0.5 + 0.5
+        gray_rgb = transforms.ToTensor()(gray.resize((IMG_SIZE, IMG_SIZE))).repeat(3, 1, 1)
+        return jsonify({
+            "original": tensor_to_base64(gray_rgb),
+            "colorized": tensor_to_base64(fake),
+        })
+
+    # Mode restauration + colorisation
+    img_bgr = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+    img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    mask = detect_mask(img_gray)
+    white_ratio = np.sum(mask == 255) / mask.size
+
+    if white_ratio > 0.5:
+        return jsonify({"error": "Image trop dégradée pour la restauration automatique."}), 400
+
+    warning = None
+    if white_ratio < 0.001:
+        warning = "Aucune zone abîmée détectée — colorisation seule appliquée."
+        repaired_bgr = img_bgr
+    else:
+        repaired_bgr = inpaint(img_bgr, mask)
+
+    repaired_gray = cv2.cvtColor(repaired_bgr, cv2.COLOR_BGR2GRAY)
+    repaired_pil = Image.fromarray(repaired_gray).resize((IMG_SIZE, IMG_SIZE))
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]),
+    ])
+    gray_tensor = transform(repaired_pil).unsqueeze(0).to(DEVICE)
+    with torch.no_grad():
+        fake = G(gray_tensor).squeeze(0).cpu() * 0.5 + 0.5
+
+    original_gray = cv2.resize(img_gray, (IMG_SIZE, IMG_SIZE))
+    original_rgb = np.stack([original_gray] * 3, axis=2)
+    mask_resized = cv2.resize(mask, (IMG_SIZE, IMG_SIZE))
+    repaired_resized = cv2.resize(repaired_bgr, (IMG_SIZE, IMG_SIZE))
+    repaired_gray_resized = cv2.cvtColor(repaired_resized, cv2.COLOR_BGR2GRAY)
+
+    response = {
+        "original": numpy_to_base64(cv2.cvtColor(original_rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)),
+        "mask": mask_to_base64(mask_resized),
+        "repaired": numpy_to_base64(cv2.cvtColor(repaired_gray_resized, cv2.COLOR_GRAY2BGR)),
+        "colorized": tensor_to_base64(fake),
+    }
+    if warning:
+        response["warning"] = warning
+    return jsonify(response)
 
 
 if __name__ == "__main__":
