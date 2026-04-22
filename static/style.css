@@ -83,3 +83,33 @@ button:not(:disabled):hover { background: #4848aa; }
 }
 
 .hidden { display: none !important; }
+
+/* ── Toggle ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.toggle-label { font-size: .9rem; color: #555; }
+
+.toggle { position: relative; display: inline-block; width: 48px; height: 26px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0;
+  background: #b0b0d0; border-radius: 26px;
+  cursor: pointer; transition: background .2s;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 20px; height: 20px;
+  left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%;
+  transition: transform .2s;
+}
+.toggle input:checked + .slider { background: #6060cc; }
+.toggle input:checked + .slider::before { transform: translateX(22px); }
+
+/* ── Résultat 4 panneaux ── */
+.warning { color: #e65100; text-align: center; font-size: .9rem; }
+.result { flex-wrap: wrap; }
