@@ -1,0 +1,9 @@
+/dataset/*
+/samples/*
+
+/docs/*
+/__pycache__/
+/.pytest_cache/
+/checkpoints/*
+
+/venv/
