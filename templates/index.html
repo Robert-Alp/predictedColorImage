@@ -3,28 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Colorisation IA — pix2pix GAN</title>
+  <title>Colorisation &amp; Restauration IA</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div class="card">
-    <h1>Colorisation IA</h1>
-    <p class="subtitle">pix2pix GAN — glisse une image N&amp;B pour la coloriser</p>
+    <h1>Colorisation &amp; Restauration IA</h1>
+    <p class="subtitle">pix2pix GAN — glisse une image pour la traiter</p>
 
     <div id="dropzone" class="dropzone">
       <span id="dropzone-label">Glisse une image ici ou clique pour choisir</span>
       <input type="file" id="file-input" accept=".jpg,.jpeg,.png" hidden />
     </div>
 
-    <button id="btn-colorize" disabled>Coloriser</button>
+    <div class="toggle-row">
+      <span class="toggle-label">Coloriser</span>
+      <label class="toggle">
+        <input type="checkbox" id="mode-toggle" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Restaurer + Coloriser</span>
+    </div>
+
+    <button id="btn-colorize" disabled>Lancer</button>
 
     <div id="spinner" class="spinner hidden"></div>
+    <p id="warning-msg" class="warning hidden"></p>
     <p id="error-msg" class="error hidden"></p>
 
     <div id="result" class="result hidden">
       <div class="img-wrapper">
-        <p>Original (N&amp;B)</p>
+        <p>Original</p>
         <img id="img-original" alt="original" />
+      </div>
+      <div class="img-wrapper restore-only hidden">
+        <p>Zones détectées</p>
+        <img id="img-mask" alt="masque" />
+      </div>
+      <div class="img-wrapper restore-only hidden">
+        <p>Réparé</p>
+        <img id="img-repaired" alt="réparé" />
       </div>
       <div class="img-wrapper">
         <p>Colorisé</p>
