@@ -3,9 +3,6 @@ matplotlib
 torch
 torchvision
 transformers
-pathlib
-pillow 
-flask>=3.0
-torch
-torchvision
 pillow
+flask>=3.0
+opencv-python
